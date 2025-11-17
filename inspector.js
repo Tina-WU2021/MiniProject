@@ -4,7 +4,7 @@
 //     const port = 8080;
 //     return `${protocol}${host}:${port}`;
 // })();
-const SIGNALING_URL = 'ws://192.168.8.3:8080';
+const SIGNALING_URL = 'https://miniproject-7tgi.onrender.com';
 
 const servers = {
     iceServers: [
