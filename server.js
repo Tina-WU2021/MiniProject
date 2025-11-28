@@ -23,6 +23,11 @@ wss.on('connection', socket => {
 });
 
 function handleMessage(socket, payload) {
+    // Log incoming messages for debugging
+    if (payload.type === 'motion-detected') {
+        console.log(`Server received motion-detected from ${payload.from || 'unknown'} in room ${payload.roomId}`);
+    }
+    
     switch (payload.type) {
         case 'create-room':
             return createRoom(socket, payload.roomId);
@@ -31,6 +36,7 @@ function handleMessage(socket, payload) {
         case 'offer':
         case 'answer':
         case 'ice-candidate':
+        case 'motion-detected':
             return relaySignal(socket, payload);
         default:
             return send(socket, { type: 'error', message: 'Unknown message type' });
@@ -71,6 +77,7 @@ function joinRoom(socket, roomId) {
     socket.meta = { roomId, role: 'inspector' };
     send(socket, { type: 'room-joined', roomId });
     send(room.host, { type: 'inspector-joined' });
+    console.log(`Inspector joined room ${roomId}, flushing ${room.pendingForInspector.length} queued messages`);
     flushQueue(room.pendingForInspector, socket);
     console.log(`Inspector joined room ${roomId}`);
 }
@@ -94,10 +101,21 @@ function relaySignal(socket, payload) {
 
     const message = sanitizeSignal(payload);
 
+    // Log motion-detected messages for debugging
+    if (payload.type === 'motion-detected') {
+        console.log(`Relaying motion-detected from ${role} to ${targetRole} in room ${roomId}`);
+    }
+
     if (targetSocket && targetSocket.readyState === READY_STATE_OPEN) {
         send(targetSocket, message);
+        if (payload.type === 'motion-detected') {
+            console.log(`Motion-detected sent directly to ${targetRole}`);
+        }
     } else {
         queue.push(message);
+        if (payload.type === 'motion-detected') {
+            console.log(`Motion-detected queued for ${targetRole} (queue length: ${queue.length})`);
+        }
     }
 }
 

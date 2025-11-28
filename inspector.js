@@ -23,12 +23,21 @@ const roomInput = document.getElementById('roomInput');
 const joinBtn = document.getElementById('joinBtn');
 const connectedRoom = document.getElementById('connectedRoom');
 const statusText = document.getElementById('statusText');
+const motionStatus = document.getElementById('motionStatus');
+
+// Initialize motion status display
+if (motionStatus) {
+    motionStatus.textContent = 'No motion';
+    console.log('Motion status element found and initialized');
+} else {
+    console.error('Motion status element not found in DOM!');
+}
 
 joinBtn.addEventListener('click', async () => {
     try {
         const value = roomInput.value.trim();
         if (!value || value.length < 4) {
-            alert('Enter a valid room number');
+            updateStatus('Please enter a valid room number');
             return;
         }
         joinBtn.disabled = true;
@@ -46,12 +55,27 @@ connectSignaling();
 function connectSignaling() {
     ws = new WebSocket(SIGNALING_URL);
     wsReadyPromise = new Promise((resolve, reject) => {
-        ws.addEventListener('open', resolve, { once: true });
-        ws.addEventListener('error', reject, { once: true });
+        ws.addEventListener('open', () => {
+            console.log('Inspector WebSocket connected');
+            resolve();
+        }, { once: true });
+        ws.addEventListener('error', (err) => {
+            console.error('Inspector WebSocket error:', err);
+            reject(err);
+        }, { once: true });
     });
-    ws.addEventListener('message', handleSignalMessage);
-    ws.addEventListener('close', () => updateStatus('Signaling disconnected'));
-    ws.addEventListener('error', () => updateStatus('Signaling error'));
+    ws.addEventListener('message', (event) => {
+        console.log('Inspector raw message received:', event.data);
+        handleSignalMessage(event);
+    });
+    ws.addEventListener('close', () => {
+        console.log('Inspector WebSocket closed');
+        updateStatus('Signaling disconnected');
+    });
+    ws.addEventListener('error', (err) => {
+        console.error('Inspector WebSocket error:', err);
+        updateStatus('Signaling error');
+    });
 }
 
 async function ensureSocket() {
@@ -91,28 +115,40 @@ async function ensurePeerConnection() {
 }
 
 function handleSignalMessage(event) {
-    const data = JSON.parse(event.data);
-    switch (data.type) {
-        case 'room-joined':
-            updateStatus('Joined room. Waiting for video…');
-            break;
-        case 'offer':
-            handleOffer(data.offer);
-            break;
-        case 'ice-candidate':
-            handleRemoteCandidate(data.candidate);
-            break;
-        case 'provider-left':
-            updateStatus('Provider disconnected');
-            joinBtn.disabled = false;
-            break;
-        case 'error':
-            updateStatus(data.message || 'Unknown error');
-            alert(data.message || 'Signaling error');
-            joinBtn.disabled = false;
-            break;
-        default:
-            break;
+    try {
+        const data = JSON.parse(event.data);
+        console.log('Inspector received message:', data.type, data);
+        
+        switch (data.type) {
+            case 'room-joined':
+                updateStatus('Joined room. Waiting for video…');
+                break;
+            case 'offer':
+                handleOffer(data.offer);
+                break;
+            case 'ice-candidate':
+                handleRemoteCandidate(data.candidate);
+                break;
+            case 'motion-detected':
+                console.log('Motion detected event received');
+                showMotionDetected();
+                break;
+            case 'provider-left':
+                updateStatus('Provider disconnected');
+                resetMotionStatus();
+                joinBtn.disabled = false;
+                break;
+            case 'error':
+                updateStatus(data.message || 'Unknown error');
+                console.error('Signaling error:', data.message || 'Unknown error');
+                joinBtn.disabled = false;
+                break;
+            default:
+                console.log('Unhandled message type:', data.type);
+                break;
+        }
+    } catch (err) {
+        console.error('Error parsing message:', err, event.data);
     }
 }
 
@@ -141,5 +177,38 @@ function sendSignal(payload) {
 
 function updateStatus(text) {
     statusText.textContent = text;
+}
+
+let motionTimeout = null;
+
+function showMotionDetected() {
+    if (motionStatus) {
+        motionStatus.textContent = 'Motion detected';
+        
+        // Clear any existing timeout
+        if (motionTimeout) {
+            clearTimeout(motionTimeout);
+        }
+        
+        // Reset to "No motion" after 0.75 seconds (you can change this to 0.5 or 1.0)
+        motionTimeout = setTimeout(() => {
+            if (motionStatus) {
+                motionStatus.textContent = 'No motion';
+            }
+            motionTimeout = null;
+        }, 750);
+    } else {
+        console.warn('Motion status element not found');
+    }
+}
+
+function resetMotionStatus() {
+    if (motionTimeout) {
+        clearTimeout(motionTimeout);
+        motionTimeout = null;
+    }
+    if (motionStatus) {
+        motionStatus.textContent = 'No motion';
+    }
 }
 
