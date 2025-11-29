@@ -73,7 +73,7 @@ async function startProvider() {
     roomCode.textContent = roomId;
     updateStatus('Requesting camera access…');
 
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     providerVideo.srcObject = localStream;
 
     // Initialize motion detection
